@@ -1,0 +1,36 @@
+Resources:
+  AddonCNI:
+    Type: 'AWS::EKS::Addon'
+    Properties:
+      AddonName: vpc-cni
+      AddonVersion: v1.12.6-eksbuild.2
+      ClusterName: sammutcluster
+      ResolveConflicts: OVERWRITE
+      ServiceAccountRoleArn: arn:aws:iam::843960079237:role/sammuteksrole2
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}/AddonCNI'
+  AddonDNS:
+    Type: 'AWS::EKS::Addon'
+    Properties:
+      AddonName: coredns
+      AddonVersion: v1.10.1-eksbuild.1
+      ClusterName: sammutcluster
+      ResolveConflicts: OVERWRITE
+      ServiceAccountRoleArn: arn:aws:iam::843960079237:role/sammuteksrole2
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}/AddonCNI'
+
+  Addonkubeproxy:
+    Type: 'AWS::EKS::Addon'
+    Properties:
+      AddonName: kube-proxy
+      AddonVersion: v1.27.1-eksbuild.1
+      ClusterName: sammutcluster
+      ResolveConflicts: OVERWRITE
+      ServiceAccountRoleArn: arn:aws:iam::843960079237:role/sammuteksrole2
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}/AddonCNI'
+        

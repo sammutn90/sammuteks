@@ -1,0 +1,624 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  EKSIAMRoleName:
+    Type: String
+    Default: sammuteksrole
+    Description: The name of the IAM role for the EKS service to assume.
+
+  EKSClusterName:
+    Type: String
+    Default: sammutcluster
+    Description: The desired name of your AWS EKS Cluster.
+    
+  VpcBlock:
+    Type: String
+    Default: 192.168.0.0/16
+    Description: The CIDR range for the VPC. This should be a valid private (RFC 1918) CIDR range.
+  PublicSubnet01Block:
+    Type: String
+    Default: 192.168.0.0/18
+    Description: CidrBlock for public subnet 01 within the VPC
+  PublicSubnet02Block:
+    Type: String
+    Default: 192.168.64.0/18
+    Description: CidrBlock for public subnet 02 within the VPC
+  PrivateSubnet01Block:
+    Type: String
+    Default: 192.168.128.0/18
+    Description: CidrBlock for private subnet 01 within the VPC
+  PrivateSubnet02Block:
+    Type: String
+    Default: 192.168.192.0/18
+    Description: CidrBlock for private subnet 02 within the VPC
+  BootstrapArguments:
+    Type: String
+    Default: ""
+    Description: "Arguments to pass to the bootstrap script. See files/bootstrap.sh in https://github.com/awslabs/amazon-eks-ami"
+  ClusterName:
+    Type: String
+    Default: sammutcluster
+    Description: The cluster name provided when the cluster was created. If it is incorrect, nodes will not be able to join the cluster.
+  KeyName:
+    Type: "AWS::EC2::KeyPair::KeyName"
+    Default: sammutkeypair
+    Description: The EC2 Key Pair to allow SSH access to the instances
+  NodeAutoScalingGroupDesiredCapacityLinux:
+    Type: Number
+    Default: 2
+    Description: Desired capacity of Node Group ASG.
+  NodeAutoScalingGroupMaxSizeLinux:
+    Type: Number
+    Default: 2
+    Description: Maximum size of Node Group ASG. Set to at least 1 greater than NodeAutoScalingGroupDesiredCapacity.
+  NodeAutoScalingGroupMinSizeLinux:
+    Type: Number
+    Default: 2
+    Description: Minimum size of Node Group ASG.
+  NodeGroupNameLinux:
+    Type: String
+    Default: sammutnodegroup
+    Description: Unique identifier for the Node Group.
+  NodeImageIdLinux:
+    Type: String
+    Default: ""
+    Description: (Optional) Specify your own custom image ID. This value overrides any AWS Systems Manager Parameter Store value specified above.
+  NodeImageIdSSMParamLinux:
+    Type: "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>"
+    Default: /aws/service/eks/optimized-ami/1.14/amazon-linux-2/recommended/image_id
+    Description: AWS Systems Manager Parameter Store parameter of the AMI ID for the worker node instances.
+  NodeInstanceType:
+    Type: String
+    Default: t3.medium
+    ConstraintDescription: Must be a valid EC2 instance type
+    Description: EC2 instance type for the node instances
+  NodeVolumeSize:
+    Type: Number
+    Default: 50
+    Description: Node volume size
+  NodeAutoScalingGroupDesiredCapacityWin:
+    Type: Number
+    Default: 2
+    Description: Desired capacity of Node Group ASG.
+  NodeAutoScalingGroupMaxSizeWin:
+    Type: Number
+    Default: 2
+    Description: Maximum size of Node Group ASG. Set to at least 1 greater than NodeAutoScalingGroupDesiredCapacity.
+  NodeAutoScalingGroupMinSizeWin:
+    Type: Number
+    Default: 2
+    Description: Minimum size of Node Group ASG.
+  NodeGroupNameWin:
+    Type: String
+    Default: sammutnodegroupwin
+    Description: Unique identifier for the Node Group.
+  NodeImageIdWin:
+    Type: String
+    Default: ""
+    Description: (Optional) Specify your own custom image ID. This value overrides any AWS Systems Manager Parameter Store value specified above.
+  NodeImageIdSSMParamWin:
+    Type: "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>"
+    Default: /aws/service/ami-windows-latest/Windows_Server-2019-English-Core-EKS_Optimized-1.26/image_id
+    Description: AWS Systems Manager Parameter Store parameter of the AMI ID for the worker node instances.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - 
+        Label:
+          default: "Worker Network Configuration"
+        Parameters:
+          - VpcBlock
+          - PublicSubnet01Block
+          - PublicSubnet02Block
+          - PrivateSubnet01Block
+          - PrivateSubnet02Block
+Resources:
+  ClusterOIDCLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: arn:aws:iam::${AWS::AccountId}:oidc-provider/${ClusterOIDCURL}
+            Action: "sts:AssumeRoleWithWebIdentity"
+            Condition:
+              StringEquals:
+                "${ClusterOIDCURL}:sub": "sts.amazonaws.com" 
+              Service:
+                - lambda.amazonaws.com
+                - eks.amazonaws.com
+                - ec2.amazonaws.com
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+        - "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+        - "arn:aws:iam::843960079237:policy/sammutekspolicy"
+        - "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+        - "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+            - Effect: Allow
+              Action:
+              - eks:DescribeCluster
+              Resource: !Sub "arn:aws:eks:${AWS::Region}:${AWS::AccountId}:cluster/${EKSClusterName}"
+            - Effect: Allow
+              Action:
+              - iam:*OpenIDConnectProvider*
+              Resource: "*"
+            - Effect: Allow
+              Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              Resource: "*"
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock:  !Ref VpcBlock
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+  InternetGateway:
+    Type: "AWS::EC2::InternetGateway"
+  VPCGatewayAttachment:
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicSubnet01:
+    Type: AWS::EC2::Subnet
+    Metadata:
+      Comment: Subnet 01
+    Properties:
+      AvailabilityZone: !Select [ 0, !GetAZs ]
+      CidrBlock:
+        Ref: PublicSubnet01Block
+      VpcId:
+        Ref: VPC
+
+  PublicSubnet02:
+    Type: AWS::EC2::Subnet
+    Metadata:
+      Comment: Subnet 02
+    Properties:
+      AvailabilityZone: !Select [ 1, !GetAZs ]
+      CidrBlock:
+        Ref: PublicSubnet02Block
+      VpcId:
+        Ref: VPC
+  PrivateSubnet01:
+    Type: AWS::EC2::Subnet
+    Metadata:
+      Comment: Subnet 03
+    Properties:
+      AvailabilityZone: !Select [ 1, !GetAZs ]
+      CidrBlock:
+        Ref: PrivateSubnet01Block
+      VpcId:
+        Ref: VPC
+
+  PrivateSubnet02:
+    Type: AWS::EC2::Subnet
+    Metadata:
+      Comment: Private Subnet 02
+    Properties:
+      AvailabilityZone: !Select [ 0, !GetAZs ]
+      CidrBlock:
+        Ref: PrivateSubnet02Block
+      VpcId:
+        Ref: VPC
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PrivateRouteTable01:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PrivateRouteTable02:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PublicRoute:
+    DependsOn: VPCGatewayAttachment
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PrivateRoute01:
+    DependsOn:
+    - VPCGatewayAttachment
+    - NatGateway01
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable01
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway01
+
+  PrivateRoute02:
+    DependsOn:
+    - VPCGatewayAttachment
+    - NatGateway02
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable02
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway02
+
+  NatGateway01:
+    DependsOn:
+    - NatGatewayEIP1
+    - PublicSubnet01
+    - VPCGatewayAttachment
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt 'NatGatewayEIP1.AllocationId'
+      SubnetId: !Ref PublicSubnet01
+
+  NatGateway02:
+    DependsOn:
+    - NatGatewayEIP2
+    - PublicSubnet02
+    - VPCGatewayAttachment
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt 'NatGatewayEIP2.AllocationId'
+      SubnetId: !Ref PublicSubnet02
+
+  NatGatewayEIP1:
+    DependsOn:
+    - VPCGatewayAttachment
+    Type: 'AWS::EC2::EIP'
+    Properties:
+      Domain: vpc
+      
+  NatGatewayEIP2:
+    DependsOn:
+    - VPCGatewayAttachment
+    Type: 'AWS::EC2::EIP'
+    Properties:
+      Domain: vpc
+
+  PublicSubnet01RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet01
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet02RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet02
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateSubnet01RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet01
+      RouteTableId: !Ref PrivateRouteTable01
+
+  PrivateSubnet02RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet02
+      RouteTableId: !Ref PrivateRouteTable02
+
+  ControlPlaneSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Cluster communication with worker nodes
+      VpcId:
+        Ref: VPC
+      
+  EKSCluster:
+    Type: AWS::EKS::Cluster
+    Properties:
+      Name: !Ref EKSClusterName
+      RoleArn:
+        "Fn::GetAtt": ["ClusterOIDCLambdaExecutionRole", "Arn"]
+      ResourcesVpcConfig:
+        SecurityGroupIds:
+          - !Ref ControlPlaneSecurityGroup
+        SubnetIds:
+          - !Ref PublicSubnet01
+          - !Ref PublicSubnet02
+          - !Ref PrivateSubnet01
+          - !Ref PrivateSubnet02
+    DependsOn: 
+      - ClusterOIDCLambdaExecutionRole 
+      - PublicSubnet01
+      - PublicSubnet02
+      - PrivateSubnet01
+      - PrivateSubnet02
+      - ControlPlaneSecurityGroup
+
+  NodeInstanceRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - eks.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+        - "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+        - "arn:aws:iam::843960079237:policy/sammutekspolicy"
+      Path: /
+
+  NodeInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Path: /
+      Roles:
+        - Ref: NodeInstanceRole
+
+  NodeSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: Security group for all nodes in the cluster
+      Tags:
+        - Key: !Sub kubernetes.io/cluster/${ClusterName}
+          Value: owned
+      VpcId:
+        Ref: VPC
+
+  NodeSecurityGroupIngress:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    DependsOn: NodeSecurityGroup
+    Properties:
+      Description: Allow node to communicate with each other
+      FromPort: 0
+      GroupId: !Ref NodeSecurityGroup
+      IpProtocol: "-1"
+      SourceSecurityGroupId: !Ref NodeSecurityGroup
+      ToPort: 65535
+
+  ControlPlaneSecurityGroupIngress:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    DependsOn: NodeSecurityGroup
+    Properties:
+      Description: Allow pods to communicate with the cluster API Server
+      FromPort: 0
+      GroupId: !Ref ControlPlaneSecurityGroup
+      IpProtocol: "-1"
+      SourceSecurityGroupId: !Ref NodeSecurityGroup
+      ToPort: 65535
+
+  ControlPlaneEgressToNodeSecurityGroup:
+    Type: "AWS::EC2::SecurityGroupEgress"
+    DependsOn: NodeSecurityGroup
+    Properties:
+      Description: Allow the cluster control plane to communicate with worker Kubelet and pods
+      DestinationSecurityGroupId: !Ref NodeSecurityGroup
+      FromPort: 0
+      GroupId: !Ref ControlPlaneSecurityGroup
+      IpProtocol: "-1"
+      ToPort: 65535
+
+  ControlPlaneEgressToNodeSecurityGroupOn443:
+    Type: "AWS::EC2::SecurityGroupEgress"
+    DependsOn: NodeSecurityGroup
+    Properties:
+      Description: Allow the cluster control plane to communicate with pods running extension API servers on port 443
+      DestinationSecurityGroupId: !Ref NodeSecurityGroup
+      FromPort: 0
+      GroupId: !Ref ControlPlaneSecurityGroup
+      IpProtocol: "-1"
+      ToPort: 65535
+
+  NodeSecurityGroupFromControlPlaneIngress:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    DependsOn: NodeSecurityGroup
+    Properties:
+      Description: Allow worker Kubelets and pods to receive communication from the cluster control plane
+      FromPort: 0
+      GroupId: !Ref NodeSecurityGroup
+      IpProtocol: "-1"
+      SourceSecurityGroupId: !Ref ControlPlaneSecurityGroup
+      ToPort: 65535
+
+  NodeSecurityGroupFromControlPlaneOn443Ingress:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    DependsOn: NodeSecurityGroup
+    Properties:
+      Description: Allow pods running extension API servers on port 443 to receive communication from cluster control plane
+      FromPort: 0
+      GroupId: !Ref NodeSecurityGroup
+      IpProtocol: "-1"
+      SourceSecurityGroupId: !Ref ControlPlaneSecurityGroup
+      ToPort: 65535
+
+  eksNodeGroupLinux:
+    Type: AWS::EKS::Nodegroup
+    Properties:
+      ClusterName: !Ref EKSClusterName
+      NodeRole: 
+        "Fn::GetAtt": ["ClusterOIDCLambdaExecutionRole", "Arn"]
+      AmiType: AL2_x86_64
+      InstanceTypes: 
+        - !Ref NodeInstanceType
+      NodegroupName: !Ref NodeGroupNameLinux
+      RemoteAccess:
+        Ec2SshKey: !Ref KeyName
+      ScalingConfig:
+        MinSize: 1
+        DesiredSize: !Ref NodeAutoScalingGroupDesiredCapacityLinux
+        MaxSize: 2
+      Labels:
+        Project: aws-eks
+      Subnets:
+        - !Ref PrivateSubnet01
+        - !Ref PrivateSubnet02
+    DependsOn: [EKSCluster, ClusterOIDCLambdaExecutionRole]
+
+  eksNodeGroupWin:
+    Type: AWS::EKS::Nodegroup
+    Properties:
+      ClusterName: !Ref EKSClusterName
+      NodeRole: 
+        "Fn::GetAtt": ["ClusterOIDCLambdaExecutionRole", "Arn"]
+      InstanceTypes: 
+        - !Ref NodeInstanceType
+      AmiType: WINDOWS_FULL_2019_x86_64
+      NodegroupName: !Ref NodeGroupNameWin
+      RemoteAccess:
+        Ec2SshKey: !Ref KeyName
+      ScalingConfig:
+        MinSize: 2
+        DesiredSize: !Ref NodeAutoScalingGroupDesiredCapacityWin
+        MaxSize: 2
+      Labels:
+        Project: aws-eks
+        os: windows
+      Subnets:
+        - !Ref PrivateSubnet01
+        - !Ref PrivateSubnet02
+    DependsOn: [EKSCluster]
+
+  ClusterOIDCURL:
+    Type: Custom::ClusterOIDCURL
+    Properties:
+      ServiceToken: !GetAtt ClusterOIDCURLFunction.Arn
+      ClusterName: !Ref EKSCluster
+    DependsOn: [EKSCluster, ClusterOIDCLambdaExecutionRole, eksNodeGroupWin, eksNodeGroupLinux]
+
+# We need to use the API to get the OpenID Connect URL from the cluster, so a Lambda does that for us here
+  ClusterOIDCURLFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.7
+      Handler: index.lambda_handler
+      MemorySize: 128
+      Role: !GetAtt ClusterOIDCLambdaExecutionRole.Arn
+      Timeout: 30
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          import cfnresponse
+          eks = boto3.client("eks")
+          def lambda_handler(event, context):
+            responseData = {}
+            if event['RequestType'] == 'Delete':
+              responseData['Reason'] = "Success"
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, "")
+            else:
+              try:
+                cluster_name = event['ResourceProperties']['ClusterName']
+                response = eks.describe_cluster(name=cluster_name)
+                cluster_oidc_url = response['cluster']['identity']['oidc']['issuer']
+                # We need the url for the roles without the protocol when creating roles, so remove
+                # it here to make this easier to use in CF templates.
+                without_protocol = cluster_oidc_url.replace('https://', '')
+                responseData['Reason'] = "Success"
+                responseData['Url'] = without_protocol
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, without_protocol)
+              except Exception as e:
+                responseData['Reason'] = str(e)
+                cfnresponse.send(event, context, cfnresponse.FAILED, responseData, "")
+    DependsOn: [EKSCluster, ClusterOIDCLambdaExecutionRole, eksNodeGroupWin, eksNodeGroupLinux]
+
+  ClusterOIDCProvider:
+    Type: Custom::ClusterOIDCProvider
+    Properties:
+      ServiceToken: !GetAtt ClusterOIDCProviderFunction.Arn
+      ClusterOIDCURL: !Ref ClusterOIDCURL
+    DependsOn: [EKSCluster, ClusterOIDCLambdaExecutionRole, eksNodeGroupWin, eksNodeGroupLinux]
+
+  # This defines the lambda that will run the setup (and teardown) code for the OIDC provider
+  ClusterOIDCProviderFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.7
+      Handler: index.lambda_handler
+      MemorySize: 128
+      Role: !GetAtt ClusterOIDCLambdaExecutionRole.Arn
+      Timeout: 30
+      Code:
+        ZipFile: |
+          import boto3
+          from botocore.exceptions import ClientError
+          import json
+          import cfnresponse
+          iam = boto3.client("iam")
+          def lambda_handler(event, context):
+            data = {}
+            try:
+              cluster_oidc_url = event['ResourceProperties']['ClusterOIDCURL']
+              if event['RequestType'] == 'Create':
+                with_protocol = "https://" + cluster_oidc_url
+                # This is the ca thumbprint of AWS's issuer
+                issuer_thumbprint = '9e99a48a9960b14926bb7f3b02e22da2b0ab7280'
+                resp = iam.create_open_id_connect_provider(Url=with_protocol,ClientIDList=['sts.amazonaws.com'],ThumbprintList=[issuer_thumbprint])
+                provider_arn = resp['OpenIDConnectProviderArn']
+                data["Reason"] = "Provider with ARN " + provider_arn + " created"
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, data, provider_arn)
+              elif event['RequestType'] == 'Delete':
+                provider_arn = event["PhysicalResourceId"]
+                if provider_arn is None:
+                  data["Reason"] = "Provider not present"
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, data, provider_arn)
+                else:
+                  resp = iam.delete_open_id_connect_provider(OpenIDConnectProviderArn=provider_arn)
+                  data["Reason"] = "Provider with ARN " + provider_arn + " deleted"
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, data, provider_arn)
+              else:
+                data["Reason"] = "Unknown operation: " + event['RequestType']
+                cfnresponse.send(event, context, cfnresponse.FAILED, data, "")
+            except Exception as e:
+              data["Reason"] = "Cannot " + event['RequestType'] + " Provider" + str(e)
+              cfnresponse.send(event, context, cfnresponse.FAILED, data, "")
+    DependsOn: [EKSCluster, ClusterOIDCLambdaExecutionRole, eksNodeGroupWin, eksNodeGroupLinux]
+
+  AddonDNS:
+    Type: 'AWS::EKS::Addon'
+    Properties:
+      AddonName: coredns
+      AddonVersion: v1.10.1-eksbuild.1
+      ClusterName: sammutcluster
+      ResolveConflicts: OVERWRITE
+      ServiceAccountRoleArn: !GetAtt NodeInstanceRole.Arn
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}/AddonCNI'
+    DependsOn: [EKSCluster, ClusterOIDCLambdaExecutionRole, ClusterOIDCURLFunction, ClusterOIDCURL, ClusterOIDCProvider, ClusterOIDCProviderFunction]
+
+  Addonkubeproxy:
+    Type: 'AWS::EKS::Addon'
+    Properties:
+      AddonName: kube-proxy
+      AddonVersion: v1.27.1-eksbuild.1
+      ClusterName: sammutcluster
+      ResolveConflicts: OVERWRITE
+      ServiceAccountRoleArn: !GetAtt NodeInstanceRole.Arn
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}/AddonCNI'
+    DependsOn: [EKSCluster, ClusterOIDCLambdaExecutionRole, ClusterOIDCURLFunction, ClusterOIDCURL, ClusterOIDCProvider, ClusterOIDCProviderFunction]
+
+Outputs:
+  ClusterOIDCURL:
+    Description: The OpenID Connect URL (without protocol)
+    Value: !Ref ClusterOIDCURL
+  ClusterOIDCProvider:
+    Description: The ARN of the OIDCProvider
+    Value: !Ref ClusterOIDCProvider

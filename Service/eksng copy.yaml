@@ -1,0 +1,44 @@
+  AddonCNI:
+    Type: 'AWS::EKS::Addon'
+    Properties:
+      AddonName: vpc-cni
+      AddonVersion: v1.12.6-eksbuild.2
+      ClusterName: !Ref EKSCluster
+      ResolveConflicts: OVERWRITE
+      ServiceAccountRoleArn: !GetAtt
+      - EKSIAMRole
+      - Arn
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}/AddonCNI'
+    DependsOn: [EKSCluster, EKSIAMRole]
+
+  AddonDNS:
+    Type: 'AWS::EKS::Addon'
+    Properties:
+      AddonName: CoreDNS
+      AddonVersion: v1.9.3-eksbuild.2
+      ClusterName: !Ref EKSCluster
+      ResolveConflicts: OVERWRITE
+      ServiceAccountRoleArn: !GetAtt
+      - EKSIAMRole
+      - Arn
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}/AddonCNI'
+    DependsOn: [EKSCluster, EKSIAMRole]
+
+  Addonkubeproxy:
+    Type: 'AWS::EKS::Addon'
+    Properties:
+      AddonName: kube-proxy
+      AddonVersion: v1.26.2-eksbuild.1
+      ClusterName: !Ref EKSCluster
+      ResolveConflicts: OVERWRITE
+      ServiceAccountRoleArn: !GetAtt
+      - EKSIAMRole
+      - Arn
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}/AddonCNI'
+    DependsOn: [EKSCluster, EKSIAMRole]

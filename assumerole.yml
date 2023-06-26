@@ -1,0 +1,26 @@
+Parameters:
+  ClusterOIDCURL:
+    Type: String
+    Default: https://oidc.eks.us-east-1.amazonaws.com/id/543E91EAC70EDFCB4117975DCF321D20
+    Description: The name of the IAM role for the EKS service to assume.
+Resources:
+  ClusterOIDCLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: "arn:aws:iam::${AWS::AccountId}:oidc-provider/${ClusterOIDCURL}"
+            Action: "sts:AssumeRoleWithWebIdentity"
+            Condition:
+              StringEquals:
+                "${ClusterOIDCURL}:sub": "sts.amazonaws.com"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+        - "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+        - "arn:aws:iam::843960079237:policy/sammutekspolicy"
+        - "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+        - "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
