@@ -436,7 +436,7 @@ Resources:
       RemoteAccess:
         Ec2SshKey: !Ref KeyName
       ScalingConfig:
-        MinSize: 1
+        MinSize: 2
         DesiredSize: !Ref NodeAutoScalingGroupDesiredCapacityLinux
         MaxSize: 2
       Labels:
