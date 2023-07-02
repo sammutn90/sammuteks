@@ -405,7 +405,7 @@ Resources:
     Type: "AWS::EC2::SecurityGroupIngress"
     DependsOn: NodeSecurityGroup
     Properties:
-      Description: Allow worker Kubelets and pods to receive communication from the cluster control planee...
+      Description: Allow worker Kubelets and pods to receive communication from the cluster control planee.....
       FromPort: 0
       GroupId: !Ref NodeSecurityGroup
       IpProtocol: "-1"
