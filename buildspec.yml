@@ -10,6 +10,3 @@ phases:
   build:
     commands:
 
-artifacts:
-  files:
-
