@@ -11,7 +11,7 @@ phases:
   build:
     commands:
       # Fetch the CloudFormation template from GitHub and upload to S3
-      - aws s3 cp https://raw.githubusercontent.com/sammutn90/sammuteks/main/Archived/eks.yaml s3://sammutcicd/cf/eks.yaml
+      - aws s3 cp https://github.com/sammutn90/sammuteks/main/Archived/eks.yaml s3://sammutcicd/cf/eks.yaml
   post_build:
     commands:
       # Output success message
