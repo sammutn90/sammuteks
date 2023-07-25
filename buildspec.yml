@@ -1,12 +1,7 @@
+# buildspec.yml
 version: 0.2
-
-env:
-  variables:
-    SOLUTION: .\CSharpHelloWorld.sln
-    PACKAGE_DIRECTORY: .\packages
-    DOTNET_FRAMEWORK: 4.6.2
 
 phases:
   build:
     commands:
-
+      - aws cloudformation deploy --template-file https://example.com/path/to/eks.yaml --stack-name MyEKSStack --capabilities CAPABILITY_IAM
