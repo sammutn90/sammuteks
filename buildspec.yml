@@ -10,9 +10,10 @@ phases:
       - pip install awscli
   build:
     commands:
-      # Fetch the CloudFormation template from GitHub and upload to S3
-      - aws s3 cp https://raw.githubusercontent.com/sammutn90/sammuteks/main/Archived/eks.yaml s3://sammutcicd/cloudformation/eks.yaml
+      # Your build commands here, e.g., build your application
+      - npm install
+      - npm run build
   post_build:
     commands:
-      # Output success message
-      - echo "CloudFormation template uploaded to S3 successfully!"
+      # Push artifacts to S3 or perform any other post-build actions
+      - aws s3 sync ./dist s3://sammutcicd/cloudformation
