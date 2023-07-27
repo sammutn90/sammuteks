@@ -1,7 +1,10 @@
-# buildspec.yml
 version: 0.2
-
 phases:
+  install:
+    runtime-versions:
+      python: 3.9
   build:
     commands:
-      - aws cloudformation deploy --template-file https://github.com/sammutn90/sammuteks/blob/develop/Archived/eks.yaml --stack-name eks --capabilities CAPABILITY_IAM
+      - aws s3 sync . s3://sammutcicd/
+  post_build:
+    commands:
