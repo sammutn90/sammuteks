@@ -3,8 +3,6 @@ AWSTemplateFormatVersion: '2010-09-09'
 Parameters:
   EKSIAMRoleName:
     Type: String
-    Default: sammuteksrole2
-    Description: The nameggg of the IAM role for the EKS gggservice to assume....
 
   EKSClusterName:
     Type: String
@@ -114,49 +112,25 @@ Metadata:
           - PrivateSubnet01Block
           - PrivateSubnet02Block
 Resources:
-  ClusterOIDCLambdaExecutionRole:
-    Type: AWS::IAM::Role
+  EKSIAMRole:
+    Type: 'AWS::IAM::Role'
     Properties:
-      Path: /
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: 2012-10-17
         Statement:
           - Effect: Allow
             Principal:
-              Federated: arn:aws:iam::${AWS::AccountId}:oidc-provider/${ClusterOIDCURL}
-            Action: "sts:AssumeRoleWithWebIdentity"
-            Condition:
-              StringEquals:
-                "${ClusterOIDCURL}:sub": "sts.amazonaws.com" 
-              Service:
-                - lambda.amazonaws.com
+              Service: 
                 - eks.amazonaws.com
                 - ec2.amazonaws.com
+            Action: 
+              - 'sts:AssumeRole'
+      RoleName: !Ref EKSIAMRoleName
       ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-        - "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-        - "arn:aws:iam::843960079237:policy/sammutekspolicy"
-        - "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-        - "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
-      Policies:
-        - PolicyName: root
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-            - Effect: Allow
-              Action:
-              - eks:DescribeCluster
-              Resource: !Sub "arn:aws:eks:${AWS::Region}:${AWS::AccountId}:cluster/${EKSClusterName}"
-            - Effect: Allow
-              Action:
-              - iam:*OpenIDConnectProvider*
-              Resource: "*"
-            - Effect: Allow
-              Action:
-              - logs:CreateLogGroup
-              - logs:CreateLogStream
-              - logs:PutLogEvents
-              Resource: "*"
+        - arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+        - arn:aws:iam::aws:policy/AmazonEKSServicePolicy
+        - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
 
   VPC:
     Type: AWS::EC2::VPC
@@ -328,7 +302,7 @@ Resources:
     Properties:
       Name: !Ref EKSClusterName
       RoleArn:
-        "Fn::GetAtt": ["ClusterOIDCLambdaExecutionRole", "Arn"]
+        "Fn::GetAtt": ["EKSIAMRole", "Arn"]
       ResourcesVpcConfig:
         SecurityGroupIds:
           - !Ref ControlPlaneSecurityGroup
@@ -338,7 +312,7 @@ Resources:
           - !Ref PrivateSubnet01
           - !Ref PrivateSubnet02
     DependsOn: 
-      - ClusterOIDCLambdaExecutionRole 
+      - EKSIAMRole 
       - PublicSubnet01
       - PublicSubnet02
       - PrivateSubnet01
@@ -429,7 +403,7 @@ Resources:
     Type: "AWS::EC2::SecurityGroupIngress"
     DependsOn: NodeSecurityGroup
     Properties:
-      Description: Allow worker Kubelets and pods to receive communication from the cluster control plane
+      Description: Allow worker Kubelets and pods to receive communication from the cluster control plannnee..
       FromPort: 0
       GroupId: !Ref NodeSecurityGroup
       IpProtocol: "-1"
@@ -452,7 +426,7 @@ Resources:
     Properties:
       ClusterName: !Ref EKSClusterName
       NodeRole: 
-        "Fn::GetAtt": ["ClusterOIDCLambdaExecutionRole", "Arn"]
+        "Fn::GetAtt": ["EKSIAMRole", "Arn"]
       AmiType: AL2_x86_64
       InstanceTypes: 
         - !Ref NodeInstanceType
@@ -460,7 +434,7 @@ Resources:
       RemoteAccess:
         Ec2SshKey: !Ref KeyName
       ScalingConfig:
-        MinSize: 1
+        MinSize: 2
         DesiredSize: !Ref NodeAutoScalingGroupDesiredCapacityLinux
         MaxSize: 2
       Labels:
@@ -468,14 +442,14 @@ Resources:
       Subnets:
         - !Ref PrivateSubnet01
         - !Ref PrivateSubnet02
-    DependsOn: [EKSCluster, ClusterOIDCLambdaExecutionRole]
+    DependsOn: [EKSCluster, EKSIAMRole]
 
   eksNodeGroupWin:
     Type: AWS::EKS::Nodegroup
     Properties:
       ClusterName: !Ref EKSClusterName
       NodeRole: 
-        "Fn::GetAtt": ["ClusterOIDCLambdaExecutionRole", "Arn"]
+        "Fn::GetAtt": ["EKSIAMRole", "Arn"]
       InstanceTypes: 
         - !Ref NodeInstanceType
       AmiType: WINDOWS_FULL_2019_x86_64
@@ -492,102 +466,7 @@ Resources:
       Subnets:
         - !Ref PrivateSubnet01
         - !Ref PrivateSubnet02
-    DependsOn: [EKSCluster]
-
-  ClusterOIDCURL:
-    Type: Custom::ClusterOIDCURL
-    Properties:
-      ServiceToken: !GetAtt ClusterOIDCURLFunction.Arn
-      ClusterName: !Ref EKSCluster
-    DependsOn: [EKSCluster, ClusterOIDCLambdaExecutionRole, eksNodeGroupWin, eksNodeGroupLinux]
-
-# We need to use the API to get the OpenID Connect URL from the cluster, so a Lambda does that for us here
-  ClusterOIDCURLFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      Runtime: python3.7
-      Handler: index.lambda_handler
-      MemorySize: 128
-      Role: !GetAtt ClusterOIDCLambdaExecutionRole.Arn
-      Timeout: 30
-      Code:
-        ZipFile: |
-          import boto3
-          import json
-          import cfnresponse
-          eks = boto3.client("eks")
-          def lambda_handler(event, context):
-            responseData = {}
-            if event['RequestType'] == 'Delete':
-              responseData['Reason'] = "Success"
-              cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, "")
-            else:
-              try:
-                cluster_name = event['ResourceProperties']['ClusterName']
-                response = eks.describe_cluster(name=cluster_name)
-                cluster_oidc_url = response['cluster']['identity']['oidc']['issuer']
-                # We need the url for the roles without the protocol when creating roles, so remove
-                # it here to make this easier to use in CF templates.
-                without_protocol = cluster_oidc_url.replace('https://', '')
-                responseData['Reason'] = "Success"
-                responseData['Url'] = without_protocol
-                cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, without_protocol)
-              except Exception as e:
-                responseData['Reason'] = str(e)
-                cfnresponse.send(event, context, cfnresponse.FAILED, responseData, "")
-    DependsOn: [EKSCluster, ClusterOIDCLambdaExecutionRole, eksNodeGroupWin, eksNodeGroupLinux]
-
-  ClusterOIDCProvider:
-    Type: Custom::ClusterOIDCProvider
-    Properties:
-      ServiceToken: !GetAtt ClusterOIDCProviderFunction.Arn
-      ClusterOIDCURL: !Ref ClusterOIDCURL
-    DependsOn: [EKSCluster, ClusterOIDCLambdaExecutionRole, eksNodeGroupWin, eksNodeGroupLinux]
-
-  # This defines the lambda that will run the setup (and teardown) code for the OIDC provider
-  ClusterOIDCProviderFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      Runtime: python3.7
-      Handler: index.lambda_handler
-      MemorySize: 128
-      Role: !GetAtt ClusterOIDCLambdaExecutionRole.Arn
-      Timeout: 30
-      Code:
-        ZipFile: |
-          import boto3
-          from botocore.exceptions import ClientError
-          import json
-          import cfnresponse
-          iam = boto3.client("iam")
-          def lambda_handler(event, context):
-            data = {}
-            try:
-              cluster_oidc_url = event['ResourceProperties']['ClusterOIDCURL']
-              if event['RequestType'] == 'Create':
-                with_protocol = "https://" + cluster_oidc_url
-                # This is the ca thumbprint of AWS's issuer
-                issuer_thumbprint = '9e99a48a9960b14926bb7f3b02e22da2b0ab7280'
-                resp = iam.create_open_id_connect_provider(Url=with_protocol,ClientIDList=['sts.amazonaws.com'],ThumbprintList=[issuer_thumbprint])
-                provider_arn = resp['OpenIDConnectProviderArn']
-                data["Reason"] = "Provider with ARN " + provider_arn + " created"
-                cfnresponse.send(event, context, cfnresponse.SUCCESS, data, provider_arn)
-              elif event['RequestType'] == 'Delete':
-                provider_arn = event["PhysicalResourceId"]
-                if provider_arn is None:
-                  data["Reason"] = "Provider not present"
-                  cfnresponse.send(event, context, cfnresponse.SUCCESS, data, provider_arn)
-                else:
-                  resp = iam.delete_open_id_connect_provider(OpenIDConnectProviderArn=provider_arn)
-                  data["Reason"] = "Provider with ARN " + provider_arn + " deleted"
-                  cfnresponse.send(event, context, cfnresponse.SUCCESS, data, provider_arn)
-              else:
-                data["Reason"] = "Unknown operation: " + event['RequestType']
-                cfnresponse.send(event, context, cfnresponse.FAILED, data, "")
-            except Exception as e:
-              data["Reason"] = "Cannot " + event['RequestType'] + " Provider" + str(e)
-              cfnresponse.send(event, context, cfnresponse.FAILED, data, "")
-    DependsOn: [EKSCluster, ClusterOIDCLambdaExecutionRole, eksNodeGroupWin, eksNodeGroupLinux]
+    DependsOn: [EKSCluster, EKSIAMRole]
 
   AddonDNS:
     Type: 'AWS::EKS::Addon'
@@ -600,7 +479,7 @@ Resources:
       Tags:
       - Key: Name
         Value: !Sub '${AWS::StackName}/AddonCNI'
-    DependsOn: [EKSCluster, ClusterOIDCLambdaExecutionRole, ClusterOIDCURLFunction, ClusterOIDCURL, ClusterOIDCProvider, ClusterOIDCProviderFunction]
+    DependsOn: [EKSCluster, EKSIAMRole]
 
   Addonkubeproxy:
     Type: 'AWS::EKS::Addon'
@@ -613,12 +492,4 @@ Resources:
       Tags:
       - Key: Name
         Value: !Sub '${AWS::StackName}/AddonCNI'
-    DependsOn: [EKSCluster, ClusterOIDCLambdaExecutionRole, ClusterOIDCURLFunction, ClusterOIDCURL, ClusterOIDCProvider, ClusterOIDCProviderFunction]
-
-Outputs:
-  ClusterOIDCURL:
-    Description: The OpenID Connect URL (without protocol)
-    Value: !Ref ClusterOIDCURL
-  ClusterOIDCProvider:
-    Description: The ARN of the OIDCProvider
-    Value: !Ref ClusterOIDCProvider
+    DependsOn: [EKSCluster, EKSIAMRole]
