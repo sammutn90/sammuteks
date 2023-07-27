@@ -3,8 +3,6 @@ AWSTemplateFormatVersion: '2010-09-09'
 Parameters:
   EKSIAMRoleName:
     Type: String
-    Default: sammuteksrole
-    Description: The name of the IAM role for the EKS service to assume..
 
   EKSClusterName:
     Type: String
