@@ -298,3 +298,200 @@ Resources:
       GroupDescription: Cluster communication with worker nodes
       VpcId:
         Ref: VPC
+      
+  EKSCluster:
+    Type: AWS::EKS::Cluster
+    Properties:
+      Name: !Ref EKSClusterName
+      RoleArn:
+        "Fn::GetAtt": ["EKSIAMRole", "Arn"]
+      ResourcesVpcConfig:
+        SecurityGroupIds:
+          - !Ref ControlPlaneSecurityGroup
+        SubnetIds:
+          - !Ref PublicSubnet01
+          - !Ref PublicSubnet02
+          - !Ref PrivateSubnet01
+          - !Ref PrivateSubnet02
+    DependsOn: 
+      - EKSIAMRole 
+      - PublicSubnet01
+      - PublicSubnet02
+      - PrivateSubnet01
+      - PrivateSubnet02
+      - ControlPlaneSecurityGroup
+
+  NodeInstanceRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - eks.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+        - "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+        - "arn:aws:iam::843960079237:policy/sammutekspolicy"
+      Path: /
+
+  NodeInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Path: /
+      Roles:
+        - Ref: NodeInstanceRole
+
+  NodeSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: Security group for all nodes in the cluster
+      Tags:
+        - Key: !Sub kubernetes.io/cluster/${ClusterName}
+          Value: owned
+      VpcId:
+        Ref: VPC
+
+  NodeSecurityGroupIngress:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    DependsOn: NodeSecurityGroup
+    Properties:
+      Description: Allow node to communicate with each other
+      FromPort: 0
+      GroupId: !Ref NodeSecurityGroup
+      IpProtocol: "-1"
+      SourceSecurityGroupId: !Ref NodeSecurityGroup
+      ToPort: 65535
+
+  ControlPlaneSecurityGroupIngress:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    DependsOn: NodeSecurityGroup
+    Properties:
+      Description: Allow pods to communicate with the cluster API Server
+      FromPort: 0
+      GroupId: !Ref ControlPlaneSecurityGroup
+      IpProtocol: "-1"
+      SourceSecurityGroupId: !Ref NodeSecurityGroup
+      ToPort: 65535
+
+  ControlPlaneEgressToNodeSecurityGroup:
+    Type: "AWS::EC2::SecurityGroupEgress"
+    DependsOn: NodeSecurityGroup
+    Properties:
+      Description: Allow the cluster control plane to communicate with worker Kubelet and pods
+      DestinationSecurityGroupId: !Ref NodeSecurityGroup
+      FromPort: 0
+      GroupId: !Ref ControlPlaneSecurityGroup
+      IpProtocol: "-1"
+      ToPort: 65535
+
+  ControlPlaneEgressToNodeSecurityGroupOn443:
+    Type: "AWS::EC2::SecurityGroupEgress"
+    DependsOn: NodeSecurityGroup
+    Properties:
+      Description: Allow the cluster control plane to communicate with pods running extension API servers on port 443
+      DestinationSecurityGroupId: !Ref NodeSecurityGroup
+      FromPort: 0
+      GroupId: !Ref ControlPlaneSecurityGroup
+      IpProtocol: "-1"
+      ToPort: 65535
+
+  NodeSecurityGroupFromControlPlaneIngress:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    DependsOn: NodeSecurityGroup
+    Properties:
+      Description: Allow worker Kubelets and pods to receive communication from the cluster control plannnee..
+      FromPort: 0
+      GroupId: !Ref NodeSecurityGroup
+      IpProtocol: "-1"
+      SourceSecurityGroupId: !Ref ControlPlaneSecurityGroup
+      ToPort: 65535
+
+  NodeSecurityGroupFromControlPlaneOn443Ingress:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    DependsOn: NodeSecurityGroup
+    Properties:
+      Description: Allow pods running extension API servers on port 443 to receive communication from cluster control plane
+      FromPort: 0
+      GroupId: !Ref NodeSecurityGroup
+      IpProtocol: "-1"
+      SourceSecurityGroupId: !Ref ControlPlaneSecurityGroup
+      ToPort: 65535
+
+  eksNodeGroupLinux:
+    Type: AWS::EKS::Nodegroup
+    Properties:
+      ClusterName: !Ref EKSClusterName
+      NodeRole: 
+        "Fn::GetAtt": ["EKSIAMRole", "Arn"]
+      AmiType: AL2_x86_64
+      InstanceTypes: 
+        - !Ref NodeInstanceType
+      NodegroupName: !Ref NodeGroupNameLinux
+      RemoteAccess:
+        Ec2SshKey: !Ref KeyName
+      ScalingConfig:
+        MinSize: 2
+        DesiredSize: !Ref NodeAutoScalingGroupDesiredCapacityLinux
+        MaxSize: 2
+      Labels:
+        Project: aws-eks
+      Subnets:
+        - !Ref PrivateSubnet01
+        - !Ref PrivateSubnet02
+    DependsOn: [EKSCluster, EKSIAMRole]
+
+  eksNodeGroupWin:
+    Type: AWS::EKS::Nodegroup
+    Properties:
+      ClusterName: !Ref EKSClusterName
+      NodeRole: 
+        "Fn::GetAtt": ["EKSIAMRole", "Arn"]
+      InstanceTypes: 
+        - !Ref NodeInstanceType
+      AmiType: WINDOWS_FULL_2019_x86_64
+      NodegroupName: !Ref NodeGroupNameWin
+      RemoteAccess:
+        Ec2SshKey: !Ref KeyName
+      ScalingConfig:
+        MinSize: 2
+        DesiredSize: !Ref NodeAutoScalingGroupDesiredCapacityWin
+        MaxSize: 2
+      Labels:
+        Project: aws-eks
+        os: windows
+      Subnets:
+        - !Ref PrivateSubnet01
+        - !Ref PrivateSubnet02
+    DependsOn: [EKSCluster, EKSIAMRole]
+
+  AddonDNS:
+    Type: 'AWS::EKS::Addon'
+    Properties:
+      AddonName: coredns
+      AddonVersion: v1.10.1-eksbuild.1
+      ClusterName: sammutcluster
+      ResolveConflicts: OVERWRITE
+      ServiceAccountRoleArn: !GetAtt NodeInstanceRole.Arn
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}/AddonCNI'
+    DependsOn: [EKSCluster, EKSIAMRole]
+
+  Addonkubeproxy:
+    Type: 'AWS::EKS::Addon'
+    Properties:
+      AddonName: kube-proxy
+      AddonVersion: v1.27.1-eksbuild.1
+      ClusterName: sammutcluster
+      ResolveConflicts: OVERWRITE
+      ServiceAccountRoleArn: !GetAtt NodeInstanceRole.Arn
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}/AddonCNI'
+    DependsOn: [EKSCluster, EKSIAMRole]
