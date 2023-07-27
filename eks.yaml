@@ -4,7 +4,7 @@ Parameters:
   EKSIAMRoleName:
     Type: String
     Default: sammuteksrole2
-    Description: The name of the IAM role for the EKS service to assume.
+    Description: The nameggg of the IAM role for the EKS service to assume.
 
   EKSClusterName:
     Type: String
