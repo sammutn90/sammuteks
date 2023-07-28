@@ -1,14 +1,6 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Parameters:
-  EKSIAMRoleName:
-    Type: String
-
-  EKSClusterName:
-    Type: String
-    Default: sammutcluster
-    Description: The desired name of your AWS EKS Cluster.
-    
+Parameters:  
   VpcBlock:
     Type: String
     Default: 192.168.0.0/16
