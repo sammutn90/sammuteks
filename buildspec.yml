@@ -2,9 +2,12 @@ version: 0.2
 phases:
   install:
     runtime-versions:
-      python: 3.9
+      python: 3.8
+    commands:
+      - pip install cfn-lint
   build:
     commands:
-      - aws s3 sync . s3://sammutcicd/
-  post_build:
-    commands:
+      - cfn-lint eks.yaml
+artifacts:
+  files:
+    - eks.yaml
