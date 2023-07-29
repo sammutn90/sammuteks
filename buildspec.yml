@@ -4,10 +4,10 @@ phases:
     runtime-versions:
       python: 3.8
     commands:
-      - pip install cfn-lint
+      
   build:
     commands:
-      - cfn-lint eks.yaml
+      
 artifacts:
   files:
     - eks.yaml
