@@ -106,7 +106,6 @@ Resources:
   PrivateRoute01:
     DependsOn:
     - VPCGatewayAttachment
-    - NatGateway01
     Type: AWS::EC2::Route
     Properties:
       RouteTableId: !Ref PrivateRouteTable01
@@ -116,7 +115,6 @@ Resources:
   PrivateRoute02:
     DependsOn:
     - VPCGatewayAttachment
-    - NatGateway02
     Type: AWS::EC2::Route
     Properties:
       RouteTableId: !Ref PrivateRouteTable02
@@ -125,8 +123,6 @@ Resources:
 
   NatGateway01:
     DependsOn:
-    - NatGatewayEIP1
-    - PublicSubnet01
     - VPCGatewayAttachment
     Type: AWS::EC2::NatGateway
     Properties:
@@ -135,8 +131,6 @@ Resources:
 
   NatGateway02:
     DependsOn:
-    - NatGatewayEIP2
-    - PublicSubnet02
     - VPCGatewayAttachment
     Type: AWS::EC2::NatGateway
     Properties:
