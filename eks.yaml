@@ -21,18 +21,7 @@ Parameters:
     Type: String
     Default: 192.168.192.0/18
     Description: CidrBlock for private subnet 02 within the VPC
-Metadata:
-  AWS::CloudFormation::Interface:
-    ParameterGroups:
-      - 
-        Label:
-          default: "Worker Network Configuration"
-        Parameters:
-          - VpcBlock
-          - PublicSubnet01Block
-          - PublicSubnet02Block
-          - PrivateSubnet01Block
-          - PrivateSubnet02Block
+    
 Resources:
   VPC:
     Type: AWS::EC2::VPC
