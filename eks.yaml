@@ -45,7 +45,7 @@ Parameters:
     Description: Desired capacity of Node Group ASG.
   NodeGroupNameLinux:
     Type: String
-    Default: sammutnodegroup
+    Default: sammutnodegroupNEW
     Description: Unique identifier for the Node Group.
   NodeInstanceType:
     Type: String
@@ -58,7 +58,7 @@ Parameters:
     Description: Desired capacity of Node Group ASG.
   NodeGroupNameWin:
     Type: String
-    Default: sammutnodegroupwin
+    Default: sammutnodegroupwinNEW
     Description: Unique identifier for the Node Group.
 
 Metadata:
