@@ -1,10 +1,20 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Parameters:  
+Parameters:
+  EKSIAMRoleName:
+    Type: String
+    Default: sammuteksrole
+    Description: The name of the IAM role for the EKS service to assume..
+
+  EKSClusterName:
+    Type: String
+    Default: sammutcluster
+    Description: The desired name of your AWS EKS Cluster.
+    
   VpcBlock:
     Type: String
     Default: 192.168.0.0/16
-    Description: The CIDR range for the VPC. This should be a valid private (RFC 1918) CIDR range, Hubnbbbla buhhbbllaafffffdhfhgfhfggpoooo.
+    Description: The CIDR range for the VPC. This should be a valid private (RFC 1918) CIDR range.
   PublicSubnet01Block:
     Type: String
     Default: 192.168.0.0/18
@@ -21,8 +31,69 @@ Parameters:
     Type: String
     Default: 192.168.192.0/18
     Description: CidrBlock for private subnet 02 within the VPC
-    
+  ClusterName:
+    Type: String
+    Default: sammutcluster
+    Description: The cluster name provided when the cluster was created. If it is incorrect, nodes will not be able to join the cluster.
+  KeyName:
+    Type: "AWS::EC2::KeyPair::KeyName"
+    Default: sammutkeypair
+    Description: The EC2 Key Pair to allow SSH access to the instances
+  NodeAutoScalingGroupDesiredCapacityLinux:
+    Type: Number
+    Default: 2
+    Description: Desired capacity of Node Group ASG.
+  NodeGroupNameLinux:
+    Type: String
+    Default: sammutnodegroup
+    Description: Unique identifier for the Node Group.
+  NodeInstanceType:
+    Type: String
+    Default: t3.medium
+    ConstraintDescription: Must be a valid EC2 instance type
+    Description: EC2 instance type for the node instances
+  NodeAutoScalingGroupDesiredCapacityWin:
+    Type: Number
+    Default: 2
+    Description: Desired capacity of Node Group ASG.
+  NodeGroupNameWin:
+    Type: String
+    Default: sammutnodegroupwin
+    Description: Unique identifier for the Node Group.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - 
+        Label:
+          default: "Worker Network Configuration"
+        Parameters:
+          - VpcBlock
+          - PublicSubnet01Block
+          - PublicSubnet02Block
+          - PrivateSubnet01Block
+          - PrivateSubnet02Block
 Resources:
+  EKSIAMRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 
+                - eks.amazonaws.com
+                - ec2.amazonaws.com
+            Action: 
+              - 'sts:AssumeRole'
+      RoleName: !Ref EKSIAMRoleName
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+        - arn:aws:iam::aws:policy/AmazonEKSServicePolicy
+        - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -106,6 +177,7 @@ Resources:
   PrivateRoute01:
     DependsOn:
     - VPCGatewayAttachment
+
     Type: AWS::EC2::Route
     Properties:
       RouteTableId: !Ref PrivateRouteTable01
@@ -115,6 +187,7 @@ Resources:
   PrivateRoute02:
     DependsOn:
     - VPCGatewayAttachment
+
     Type: AWS::EC2::Route
     Properties:
       RouteTableId: !Ref PrivateRouteTable02
@@ -123,6 +196,7 @@ Resources:
 
   NatGateway01:
     DependsOn:
+
     - VPCGatewayAttachment
     Type: AWS::EC2::NatGateway
     Properties:
@@ -131,6 +205,8 @@ Resources:
 
   NatGateway02:
     DependsOn:
+
+
     - VPCGatewayAttachment
     Type: AWS::EC2::NatGateway
     Properties:
@@ -174,3 +250,197 @@ Resources:
     Properties:
       SubnetId: !Ref PrivateSubnet02
       RouteTableId: !Ref PrivateRouteTable02
+
+  ControlPlaneSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Cluster communication with worker nodes
+      VpcId:
+        Ref: VPC
+      
+  EKSCluster:
+    Type: AWS::EKS::Cluster
+    Properties:
+      Name: !Ref EKSClusterName
+      RoleArn:
+        "Fn::GetAtt": ["EKSIAMRole", "Arn"]
+      ResourcesVpcConfig:
+        SecurityGroupIds:
+          - !Ref ControlPlaneSecurityGroup
+        SubnetIds:
+          - !Ref PublicSubnet01
+          - !Ref PublicSubnet02
+          - !Ref PrivateSubnet01
+          - !Ref PrivateSubnet02
+    DependsOn: 
+
+
+
+  NodeInstanceRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - eks.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+        - "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+        - "arn:aws:iam::843960079237:policy/sammutekspolicy"
+      Path: /
+
+  NodeInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Path: /
+      Roles:
+        - Ref: NodeInstanceRole
+
+  NodeSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: Security group for all nodes in the cluster
+      Tags:
+        - Key: !Sub kubernetes.io/cluster/${ClusterName}
+          Value: owned
+      VpcId:
+        Ref: VPC
+
+  NodeSecurityGroupIngress:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    Properties:
+      Description: Allow node to communicate with each other
+      FromPort: 0
+      GroupId: !Ref NodeSecurityGroup
+      IpProtocol: "-1"
+      SourceSecurityGroupId: !Ref NodeSecurityGroup
+      ToPort: 65535
+
+  ControlPlaneSecurityGroupIngress:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    Properties:
+      Description: Allow pods to communicate with the cluster API Server
+      FromPort: 0
+      GroupId: !Ref ControlPlaneSecurityGroup
+      IpProtocol: "-1"
+      SourceSecurityGroupId: !Ref NodeSecurityGroup
+      ToPort: 65535
+
+  ControlPlaneEgressToNodeSecurityGroup:
+    Type: "AWS::EC2::SecurityGroupEgress"
+    Properties:
+      Description: Allow the cluster control plane to communicate with worker Kubelet and pods
+      DestinationSecurityGroupId: !Ref NodeSecurityGroup
+      FromPort: 0
+      GroupId: !Ref ControlPlaneSecurityGroup
+      IpProtocol: "-1"
+      ToPort: 65535
+
+  ControlPlaneEgressToNodeSecurityGroupOn443:
+    Type: "AWS::EC2::SecurityGroupEgress"
+    Properties:
+      Description: Allow the cluster control plane to communicate with pods running extension API servers on port 443
+      DestinationSecurityGroupId: !Ref NodeSecurityGroup
+      FromPort: 0
+      GroupId: !Ref ControlPlaneSecurityGroup
+      IpProtocol: "-1"
+      ToPort: 65535
+
+  NodeSecurityGroupFromControlPlaneIngress:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    Properties:
+      Description: Allow worker Kubelets and pods to receive communication from the cluster control plannnee..
+      FromPort: 0
+      GroupId: !Ref NodeSecurityGroup
+      IpProtocol: "-1"
+      SourceSecurityGroupId: !Ref ControlPlaneSecurityGroup
+      ToPort: 65535
+
+  NodeSecurityGroupFromControlPlaneOn443Ingress:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    Properties:
+      Description: Allow pods running extension API servers on port 443 to receive communication from cluster control plane
+      FromPort: 0
+      GroupId: !Ref NodeSecurityGroup
+      IpProtocol: "-1"
+      SourceSecurityGroupId: !Ref ControlPlaneSecurityGroup
+      ToPort: 65535
+
+  eksNodeGroupLinux:
+    Type: AWS::EKS::Nodegroup
+    Properties:
+      ClusterName: !Ref EKSClusterName
+      NodeRole: 
+        "Fn::GetAtt": ["EKSIAMRole", "Arn"]
+      AmiType: AL2_x86_64
+      InstanceTypes: 
+        - !Ref NodeInstanceType
+      NodegroupName: !Ref NodeGroupNameLinux
+      RemoteAccess:
+        Ec2SshKey: !Ref KeyName
+      ScalingConfig:
+        MinSize: 2
+        DesiredSize: !Ref NodeAutoScalingGroupDesiredCapacityLinux
+        MaxSize: 2
+      Labels:
+        Project: aws-eks
+      Subnets:
+        - !Ref PrivateSubnet01
+        - !Ref PrivateSubnet02
+    DependsOn: [EKSCluster]
+
+  eksNodeGroupWin:
+    Type: AWS::EKS::Nodegroup
+    Properties:
+      ClusterName: !Ref EKSClusterName
+      NodeRole: 
+        "Fn::GetAtt": ["EKSIAMRole", "Arn"]
+      InstanceTypes: 
+        - !Ref NodeInstanceType
+      AmiType: WINDOWS_FULL_2019_x86_64
+      NodegroupName: !Ref NodeGroupNameWin
+      RemoteAccess:
+        Ec2SshKey: !Ref KeyName
+      ScalingConfig:
+        MinSize: 2
+        DesiredSize: !Ref NodeAutoScalingGroupDesiredCapacityWin
+        MaxSize: 2
+      Labels:
+        Project: aws-eks
+        os: windows
+      Subnets:
+        - !Ref PrivateSubnet01
+        - !Ref PrivateSubnet02
+    DependsOn: [EKSCluster]
+
+  AddonDNS:
+    Type: 'AWS::EKS::Addon'
+    Properties:
+      AddonName: coredns
+      AddonVersion: v1.10.1-eksbuild.1
+      ClusterName: sammutcluster
+      ResolveConflicts: OVERWRITE
+      ServiceAccountRoleArn: !GetAtt NodeInstanceRole.Arn
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}/AddonCNI'
+    DependsOn: [EKSCluster]
+
+  Addonkubeproxy:
+    Type: 'AWS::EKS::Addon'
+    Properties:
+      AddonName: kube-proxy
+      AddonVersion: v1.27.1-eksbuild.1
+      ClusterName: sammutcluster
+      ResolveConflicts: OVERWRITE
+      ServiceAccountRoleArn: !GetAtt NodeInstanceRole.Arn
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}/AddonCNI'
+    DependsOn: [EKSCluster, EKSIAMRole]
