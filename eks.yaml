@@ -272,10 +272,6 @@ Resources:
           - !Ref PublicSubnet02
           - !Ref PrivateSubnet01
           - !Ref PrivateSubnet02
-    DependsOn: 
-
-
-
   NodeInstanceRole:
     Type: "AWS::IAM::Role"
     Properties:
