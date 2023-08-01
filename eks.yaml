@@ -13,23 +13,23 @@ Parameters:
     
   VpcBlock:
     Type: String
-    Default: 192.168.0.0/16
+    Default: 192.168.0.0/8
     Description: The CIDR range for the VPC. This should be a valid private (RFC 1918) CIDR range.
   PublicSubnet01Block:
     Type: String
-    Default: 192.168.0.0/18
+    Default: 192.168.0.0/10     
     Description: CidrBlock for public subnet 01 within the VPC
   PublicSubnet02Block:
     Type: String
-    Default: 192.168.64.0/18
+    Default: 192.168.64.0/10
     Description: CidrBlock for public subnet 02 within the VPC
   PrivateSubnet01Block:
     Type: String
-    Default: 192.168.128.0/18
+    Default: 192.168.128.0/10
     Description: CidrBlock for private subnet 01 within the VPC
   PrivateSubnet02Block:
     Type: String
-    Default: 192.168.192.0/18
+    Default: 192.168.192.0/10
     Description: CidrBlock for private subnet 02 within the VPC
   ClusterName:
     Type: String
@@ -93,6 +93,7 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonEKSServicePolicy
         - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::843960079237:policy/sammutekspolicy
 
   VPC:
     Type: AWS::EC2::VPC
@@ -436,6 +437,19 @@ Resources:
       ClusterName: sammutcluster
       ResolveConflicts: OVERWRITE
       ServiceAccountRoleArn: !GetAtt NodeInstanceRole.Arn
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}/AddonCNI'
+    DependsOn: [EKSCluster, EKSIAMRole]
+
+  AddonCNI:
+    Type: 'AWS::EKS::Addon'
+    Properties:
+      AddonName: vpc-cni
+      AddonVersion: v1.12.6-eksbuild.2
+      ClusterName: sammutcluster
+      ResolveConflicts: OVERWRITE
+      ServiceAccountRoleArn: arn:aws:iam::843960079237:role/sammuteksrole2
       Tags:
       - Key: Name
         Value: !Sub '${AWS::StackName}/AddonCNI'
