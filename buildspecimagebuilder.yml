@@ -1,0 +1,17 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      # Install Docker to the CodeBuild environment
+      - apt-get update
+      - apt-get install -y docker.io
+  build:
+    commands:
+      # Build the Docker image and tag it with the ECR repository URL
+      - $(aws ecr get-login --no-include-email --region us-east-1)
+      - docker build -t 843960079237.dkr.ecr.us-east-1.amazonaws.com/sammutecr:latest .
+  post_build:
+    commands:
+      # Push the Docker image to ECR
+      - docker push 843960079237.dkr.ecr.us-east-1.amazonaws.com/sammutecr:latest
