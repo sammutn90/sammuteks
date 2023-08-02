@@ -21,15 +21,15 @@ Parameters:
     Description: CidrBlock for public subnet 01 within the VPC
   PublicSubnet02Block:
     Type: String
-    Default: 10.64.0.0/18
+    Default: 10.0.64.0/18
     Description: CidrBlock for public subnet 02 within the VPC
   PrivateSubnet01Block:
     Type: String
-    Default: 10.128.0.0/18
+    Default: 10.0.128.0/18
     Description: CidrBlock for private subnet 01 within the VPC
   PrivateSubnet02Block:
     Type: String
-    Default: 10.192.0.0/18
+    Default: 10.0.192.0/18
     Description: CidrBlock for private subnet 02 within the VPC
   ClusterName:
     Type: String
