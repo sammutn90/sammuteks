@@ -1,9 +1,17 @@
 version: 0.2
 
 phases:
+  pre_build:
+    commands:
+      # Update Docker CLI to the latest version (optional, you may skip this if it's already updated)
+      - choco install docker-cli -y --force
+      - refreshenv
+      # Login to Amazon ECR using Docker CLI
+      - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 843960079237.dkr.ecr.us-east-1.amazonaws.com
+
   build:
     commands:
       # Build the Docker image and tag it with the ECR repository URL
-      - $(aws ecr get-login --no-include-email --region us-east-1)
       - docker build -t 843960079237.dkr.ecr.us-east-1.amazonaws.com/sammutecr:latest .
+      # Push the Docker image to Amazon ECR
       - docker push 843960079237.dkr.ecr.us-east-1.amazonaws.com/sammutecr:latest
