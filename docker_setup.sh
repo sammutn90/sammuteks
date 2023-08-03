@@ -2,7 +2,7 @@
 
 # Function to start Docker daemon if not running
 start_docker_daemon() {
-  sudo systemctl start docker
+  sudo service docker start  # Use 'sudo service docker start' instead of 'sudo systemctl start docker'
 }
 
 # Function to check Docker installation and version
@@ -13,16 +13,11 @@ check_docker_installation() {
   fi
 }
 
-# Function to add current user to the "docker" group
-add_user_to_docker_group() {
-  sudo usermod -aG docker $USER
-  echo "Please log out and log back in to apply the changes."
-}
+# Function to add current user to the "docker" group (not needed in CodeBuild)
+# CodeBuild environment already has Docker access without needing to add the user to the "docker" group.
 
-# Function to restart Docker servicee
-restart_docker_service() {
-  sudo systemctl restart docker
-}
+# Function to restart Docker service (not needed in CodeBuild)
+# CodeBuild environment handles Docker service management, so no need for manual restarts.
 
 # Check if Docker daemon is running
 if ! docker info &>/dev/null; then
@@ -32,17 +27,3 @@ fi
 
 # Check Docker installation and version
 check_docker_installation
-
-# Check Docker permissions
-if ! docker info &>/dev/null; then
-  echo "Docker permissions issue. Adding current user to the 'docker' group..."
-  add_user_to_docker_group
-  echo "Please run the pipeline again after logging out and logging back in."
-  exit 1
-fi
-
-# Restart Docker service after adding to 'docker' group (if necessary)
-if [ -n "$DOCKER_GROUP_ADDED" ]; then
-  echo "Restarting Docker service..."
-  restart_docker_service
-fi
