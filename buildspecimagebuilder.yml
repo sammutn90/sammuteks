@@ -5,5 +5,5 @@ phases:
     commands:
       # Build the Docker image and tag it with the ECR repository URL
       - $(aws ecr get-login --no-include-email --region us-east-1)
-      - docker build -t 843960079237.dkr.ecr.us-east-1.amazonaws.com/sammutecr:latest -f C:/Users/Nathan/OneDrive/git/dockerimages/Dockerfile .
+      - docker build -t 843960079237.dkr.ecr.us-east-1.amazonaws.com/sammutecr:latest -f 'C:/Users/Nathan/OneDrive/git/dockerimages/Dockerfile' .
       - docker push 843960079237.dkr.ecr.us-east-1.amazonaws.com/sammutecr:latest
