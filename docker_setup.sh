@@ -19,7 +19,7 @@ add_user_to_docker_group() {
   echo "Please log out and log back in to apply the changes."
 }
 
-# Function to restart Docker service
+# Function to restart Docker servicee
 restart_docker_service() {
   sudo systemctl restart docker
 }
