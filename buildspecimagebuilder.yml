@@ -1,6 +1,11 @@
 version: 0.2
 
 phases:
+
+  pre_build:
+    commands:
+      # Call the docker_setup.sh script to ensure Docker environment is set up correctly
+      - ./docker_setup.sh
   build:
     commands:
       # Build the Docker image and tag it with the ECR repository URL
