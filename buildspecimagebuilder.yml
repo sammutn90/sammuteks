@@ -7,19 +7,14 @@ phases:
       - choco install docker-cli -y --force
       - refreshenv
       # Check if Docker daemon is running, and start it if not
-      - IF (!(Test-Path "//./pipe/docker_engine")) {
-          Write-Output "Docker daemon is not running. Starting Docker daemon..."
-          Start-Process dockerd -NoNewWindow
-          Start-Sleep -Seconds 20
-          }
-        
-      # Verify Docker installation and version
-      - docker version
-      # Login to Amazon ECR using Docker CLI
-      - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 843960079237.dkr.ecr.us-east-1.amazonaws.com
+      - Start-Service docker
+      - Start-Sleep -Seconds 10  # Wait for the Docker daemon to start (adjust if needed)
+      - docker info  # Check Docker information (optional)
 
   build:
     commands:
+      # Login to Amazon ECR using Docker CLI
+      - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 843960079237.dkr.ecr.us-east-1.amazonaws.com
       # Build the Docker image and tag it with the ECR repository URL
       - docker build -t 843960079237.dkr.ecr.us-east-1.amazonaws.com/sammutecr:latest .
       # Push the Docker image to Amazon ECR
