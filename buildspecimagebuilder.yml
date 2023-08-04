@@ -7,6 +7,7 @@ phases:
   build:
     commands:
       - echo "Building Docker image..."
-      - docker build -t sammutecr/my-app .
+      - docker build -t 843960079237.dkr.ecr.us-east-1.amazonaws.com/sammutecr:latest .
       - echo "Pushing Docker image to ECR..."
-      - docker push 843960079237.dkr.ecr.us-east-1.amazonaws.com/sammutecr/my-app
+      - docker push 843960079237.dkr.ecr.us-east-1.amazonaws.com/sammutecr:latest
+      
