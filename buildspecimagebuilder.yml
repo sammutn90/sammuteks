@@ -1,14 +1,12 @@
 version: 0.2
-
 phases:
   pre_build:
     commands:
-
+      - echo "Logging in to Amazon ECR..."
+      - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 843960079237.dkr.ecr.us-east-1.amazonaws.com
   build:
     commands:
-      # Login to Amazon ECR using Docker CLI
-      - (Get-ECRLoginCommand).Password | docker login --username AWS --password-stdin 843960079237.dkr.ecr.us-east-1.amazonaws.com
-      # Build the Docker image and tag it with the ECR repository URL
-      - docker build -t 843960079237.dkr.ecr.us-east-1.amazonaws.com/sammutecr:latest .
-      # Push the Docker image to Amazon ECR
-      - docker push 843960079237.dkr.ecr.us-east-1.amazonaws.com/sammutecr:latest
+      - echo "Building Docker image..."
+      - docker build -t sammutecr/my-app .
+      - echo "Pushing Docker image to ECR..."
+      - docker push 843960079237.dkr.ecr.us-east-1.amazonaws.com/sammutecr/my-app
