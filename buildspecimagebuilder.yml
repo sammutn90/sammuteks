@@ -3,12 +3,6 @@ version: 0.2
 phases:
   pre_build:
     commands:
-      # Update Docker CLI to the latest version (optional, you may skip this if it's already updated)
-      - choco install docker-cli -y --force
-      - refreshenv
-      # Check if Docker daemon is running, and start it if not
-      - Start-Service docker
-      - Start-Sleep -Seconds 10  # Wait for the Docker daemon to start (adjust if needed)
       - docker info  # Check Docker information (optional)
 
   build:
