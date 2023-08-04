@@ -7,7 +7,7 @@ phases:
   build:
     commands:
       # Login to Amazon ECR using Docker CLI
-      - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 843960079237.dkr.ecr.us-east-1.amazonaws.com
+      - aws ecr get-login-password --region us-east-1 | docker login --username sammutn90 --password-stdin 843960079237.dkr.ecr.us-east-1.amazonaws.com
       # Build the Docker image and tag it with the ECR repository URL
       - docker build -t 843960079237.dkr.ecr.us-east-1.amazonaws.com/sammutecr:latest .
       # Push the Docker image to Amazon ECR
