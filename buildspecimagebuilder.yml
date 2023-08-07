@@ -2,17 +2,20 @@ version: 0.2
 phases:
   pre_build:
     commands:
-      - echo "Installing Docker..."
-      - choco install docker-desktop -y  # Use 'choco' package manager for Windows
-      - docker --version
+      - echo "Installing Chocolatey..."
+      - Set-ExecutionPolicy Bypass -Scope Process -Force; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+      - choco --version
+      - echo "Installing Docker Desktop..."
+      - choco install docker-desktop -y
       - echo "Installing AWS CLI..."
       - choco install awscli -y
       - aws --version
       - echo "Getting ECR login command..."
-      - ECR_LOGIN_CMD=$(aws ecr get-login-password --region us-east-1)
+      - $ECR_LOGIN_CMD=$(aws ecr get-login-password --region us-east-1)
       - echo "$ECR_LOGIN_CMD"
       - $ECR_LOGIN_CMD
       - docker login --username AWS --password-stdin 843960079237.dkr.ecr.us-east-1.amazonaws.com
+
   build:
     commands:
       - echo "Building Docker image..."
