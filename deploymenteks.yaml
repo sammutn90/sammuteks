@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sammuteks
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: web
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: web
+        os: windows
+
+    spec:
+      containers:
+        - name: back-end
+          image: 843960079237.dkr.ecr.us-east-1.amazonaws.com/sammutecr:latest
+          ports:
+            - containerPort: 3000
+      nodeSelector:
+        kubernetes.io/os: windows
+        kubernetes.io/arch: amd64
+
