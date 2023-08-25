@@ -56,10 +56,6 @@ Parameters:
     Type: Number
     Default: 2
     Description: Desired capacity of Node Group ASG.
-  NodeGroupNameWin:
-    Type: String
-    Default: sammutnodegroupwinNEW
-    Description: Unique identifier for the Node Group.
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -387,30 +383,6 @@ Resources:
         MaxSize: 2
       Labels:
         Project: aws-eks
-      Subnets:
-        - !Ref PrivateSubnet01
-        - !Ref PrivateSubnet02
-    DependsOn: [EKSCluster]
-
-  eksNodeGroupWin:
-    Type: AWS::EKS::Nodegroup
-    Properties:
-      ClusterName: !Ref EKSClusterName
-      NodeRole: 
-        "Fn::GetAtt": ["EKSIAMRole", "Arn"]
-      InstanceTypes: 
-        - !Ref NodeInstanceType
-      AmiType: WINDOWS_FULL_2019_x86_64
-      NodegroupName: !Ref NodeGroupNameWin
-      RemoteAccess:
-        Ec2SshKey: !Ref KeyName
-      ScalingConfig:
-        MinSize: 2
-        DesiredSize: !Ref NodeAutoScalingGroupDesiredCapacityWin
-        MaxSize: 2
-      Labels:
-        Project: aws-eks
-        os: windows
       Subnets:
         - !Ref PrivateSubnet01
         - !Ref PrivateSubnet02
