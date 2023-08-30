@@ -77,6 +77,15 @@ Resources:
               Service: 
                 - eks.amazonaws.com
                 - ec2.amazonaws.com
+                - codepipeline.amazonaws.com
+                - codebuild.amazonaws.com
+                - codedeploy.amazonaws.com
+                - iam.amazonaws.com
+                - s3.amazonaws.com
+                - kms.amazonaws.com
+                - cloudformation.amazonaws.com
+              AWS: 
+                - arn:aws:iam::843960079237:root
             Action: 
               - 'sts:AssumeRole'
       RoleName: !Ref EKSIAMRoleName

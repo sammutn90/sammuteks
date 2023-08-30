@@ -6,10 +6,6 @@ phases:
       - echo "Install Phase - Nothing to do using latest Amazon Linux Docker Image for CodeBuild which has all AWS Tools - https://github.com/aws/aws-codebuild-docker-images/blob/master/al2/x86_64/standard/3.0/Dockerfile"
   pre_build:
       commands:
-        #Environment Variables
-        - REPOSITORY_URI = 843960079237.dkr.ecr.us-east-1.amazonaws.com/sammutecr/eks-devops-nginx
-        - EKS_KUBECTL_ROLE_ARN = arn:aws:iam::843960079237:role/sammuteksrole2
-        - EKS_CLUSTER_NAME = sammutcluster
         # Docker Image Tag with Date Time & Code Buiild Resolved Source Version
         - TAG="$(date +%Y-%m-%d.%H.%M.%S).$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | head -c 8)"
         # Update Image tag in our Kubernetes Deployment Manifest        
